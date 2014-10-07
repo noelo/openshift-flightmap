@@ -1,159 +1,222 @@
-#!/bin/env node
-//  OpenShift sample Node application
-var express = require('express');
-var fs      = require('fs');
+var sys = require('sys');
+var net = require('net');
+var mqtt = require('mqtt');
+var static = require('node-static');
+var sbs1 = require('sbs1');
+var HashMap = require('hashmap').HashMap;
 
 
-/**
- *  Define the sample application.
- */
-var SampleApp = function() {
+var FlightMap = new HashMap();
 
-    //  Scope.
-    var self = this;
+var io  = require('socket.io').listen(5000);
 
-
-    /*  ================================================================  */
-    /*  Helper functions.                                                 */
-    /*  ================================================================  */
-
-    /**
-     *  Set up server IP address and port # using env variables/defaults.
-     */
-    self.setupVariables = function() {
-        //  Set the environment variables we need.
-        self.ipaddress = process.env.OPENSHIFT_NODEJS_IP;
-        self.port      = process.env.OPENSHIFT_NODEJS_PORT || 8080;
-
-        if (typeof self.ipaddress === "undefined") {
-            //  Log errors on OpenShift but continue w/ 127.0.0.1 - this
-            //  allows us to run/test the app locally.
-            console.warn('No OPENSHIFT_NODEJS_IP var, using 127.0.0.1');
-            self.ipaddress = "127.0.0.1";
-        };
-    };
+var MQTTOptions = {
+  username: 'admin',
+  password: 'admin123456',
+};
+var client = mqtt.createClient(1883, 'localhost',MQTTOptions);
 
 
-    /**
-     *  Populate the cache.
-     */
-    self.populateCache = function() {
-        if (typeof self.zcache === "undefined") {
-            self.zcache = { 'index.html': '' };
-        }
+var file = new static.Server('./public'); 
+require('http').createServer(function (request, response) {
+  var url = request.url;
+  console.log(url);
+  if(url == '/dump1090/data.json')
+  {
+    response.setHeader("Content-Type", "text/json");
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    console.log(JSON.stringify(buildFlightDataArray()));
+    response.end(JSON.stringify(buildFlightDataArray()));
+  }
+  else {
+    file.serve(request, response);
+  }
+  request.addListener('end', function () {
+  }).resume();
+}).listen(8080);
 
-        //  Local cache for static content.
-        self.zcache['index.html'] = fs.readFileSync('./index.html');
-    };
+client.subscribe('/topic/flightinfo',function(){
+	console.log('Subscribed....')
+});
+
+//Websockets to be done later
+io.sockets.on('connection', function (socket) {
+  socket.on('subscribe', function (data) {
+    console.log('Subscribing to '+data.topic);
+    client.subscribe(data.topic);
+  });
+});
+
+client.addListener('mqttData', function(topic, payload){
+  sys.puts(topic+'='+payload);
+  io.sockets.emit('mqtt',{'topic':String(topic),
+    'payload':String(payload)});
+});
+
+client.on('message',function(topic,message){
+  var msg = sbs1.parseSbs1Message(message);
+
+  if (msg.message_type === sbs1.MessageType.TRANSMISSION){
+    var curr = FlightMap.get(msg.hex_ident)
+    switch(msg.transmission_type){
+
+      case sbs1.TransmissionType.ES_IDENT_AND_CATEGORY:
+      if (curr === undefined){
+        var tmp = {};
+        tmp.callsign = msg.callsign;
+        tmp.hex_ident = msg.hex_ident;
+        tmp.updatetimestamp = Date.now();
+        tmp.messagecount=0;
+        FlightMap.set(msg.hex_ident,tmp);
+      }else{
+        curr.callsign = msg.callsign; 
+        curr.messagecount++;
+        curr.updatetimestamp = Date.now();
+        FlightMap.set(msg.hex_ident,curr);
+      }
+      break;
+
+      case sbs1.TransmissionType.ES_AIRBORNE_POS:
+      if (curr === undefined){
+        var tmp = {};
+        tmp.callsign = 'Unknown';
+        tmp.hex_ident = msg.hex_ident;
+        tmp.altitude = msg.altitude;
+        tmp.lat = msg.lat;
+        tmp.lon = msg.lon;
+        tmp.messagecount=0;
+        FlightMap.set(msg.hex_ident,tmp);
+
+      }else{
+        curr.hex_ident = msg.hex_ident;
+        curr.altitude = msg.altitude;
+        curr.lat = msg.lat;
+        curr.lon = msg.lon;
+        curr.messagecount++;
+        curr.updatetimestamp = Date.now();
+        FlightMap.set(msg.hex_ident,curr);
+      }
+      break;
+
+      case sbs1.TransmissionType.ES_SURFACE_POS:
+      if (curr === undefined){
+        var tmp = {};
+        tmp.callsign = 'Unknown';
+        tmp.hex_ident = msg.hex_ident;
+        tmp.altitude = msg.altitude;
+        tmp.lat = msg.lat;
+        tmp.lon = msg.lon;
+        tmp.track = msg.track;
+        tmp.speed = msg.ground_speed;
+        tmp.messagecount=0;
+        FlightMap.set(msg.hex_ident,tmp);
+      }else{
+        curr.hex_ident = msg.hex_ident;
+        curr.altitude = msg.altitude;
+        curr.lat = msg.lat;
+        curr.lon = msg.lon;
+        curr.track = msg.track;
+        curr.speed = msg.ground_speed;
+        curr.messagecount++;
+        curr.updatetimestamp = Date.now();
+        FlightMap.set(msg.hex_ident,curr);
+      }
+      break;
+
+      case sbs1.TransmissionType.ES_AIRBORNE_VEL:
+      if (curr === undefined){
+        var tmp = {};
+        tmp.callsign = 'Unknown';
+        tmp.hex_ident = msg.hex_ident;
+        tmp.vert_rate = msg.vertical_rate;
+        tmp.track = msg.track;
+        tmp.speed = msg.ground_speed;
+        tmp.updatetimestamp = Date.now();
+        tmp.messagecount=0;
+        FlightMap.set(msg.hex_ident,tmp);
+      }else{
+        curr.hex_ident = msg.hex_ident;
+        curr.vert_rate = msg.vertical_rate;
+        curr.track = msg.track;
+        curr.speed = msg.ground_speed;
+        curr.updatetimestamp = Date.now();
+        curr.messagecount++;
+        FlightMap.set(msg.hex_ident,curr);
+      }
+      break;
+
+      case sbs1.TransmissionType.SURVEILLANCE_ID:
+      if (curr === undefined){
+        var tmp = {};
+        tmp.hex_ident = msg.hex_ident;
+        tmp.callsign = 'Unknown';
+        tmp.squawk = msg.squawk;
+        tmp.messagecount=0;
+        FlightMap.set(msg.hex_ident,tmp);
+      }else{
+        curr.hex_ident = msg.hex_ident;
+        curr.squawk = msg.squawk;
+        curr.timestamp = Date.now();
+        curr.messagecount++;
+        curr.updatetimestamp = Date.now();
+        FlightMap.set(msg.hex_ident,curr);
+      }
+      break;
 
 
-    /**
-     *  Retrieve entry (content) from cache.
-     *  @param {string} key  Key identifying content to retrieve from cache.
-     */
-    self.cache_get = function(key) { return self.zcache[key]; };
+      default:
+      status_msg =''
+    }
+  }});
+
+client.on('connect',function(){
+  console.log('connected ....')
+});
+
+setInterval(function() { console.log("----------------------------------");console.log(JSON.stringify(FlightMap));console.log("=================================="); }, 20000);
+
+setInterval(function() { cleanFlightDataArray(); }, 120000);
 
 
-    /**
-     *  terminator === the termination handler
-     *  Terminate server on receipt of the specified signal.
-     *  @param {string} sig  Signal to terminate on.
-     */
-    self.terminator = function(sig){
-        if (typeof sig === "string") {
-           console.log('%s: Received %s - terminating sample app ...',
-                       Date(Date.now()), sig);
-           process.exit(1);
-        }
-        console.log('%s: Node server stopped.', Date(Date.now()) );
-    };
+function buildFlightDataArray(){
+  var results=[];
+  FlightMap.forEach(function(value, key) {
+    // Count the number of properties to remove incomplete data
+    if (Object.keys(value).length >= 12){
+      var x={};
+      x.hex = value.hex_ident;
+      x.squawk = value.squawk;
+      x.flight = value.callsign;
+      x.lat = value.lat;
+      x.lon = value.lon;
+      x.validposition = 1;
+      x.altitude = value.altitude;
+      x.vert_rate = value.vert_rate;
+      x.track = value.track;
+      x.validtrack = 1;
+      x.speed = value.speed;
+      x.messages = value.messagecount;
+      //Indicate to UI to remove stuff that hasn't been updated in a minute
+      if ((Date.now() - value.updatetimestamp )>60000){
+        x.seen = 60;
+      }else{
+        x.seen = 1;
+      }
+      results.push(x);
+    }
+  });
+  return results;
+}
 
 
-    /**
-     *  Setup termination handlers (for exit and a list of signals).
-     */
-    self.setupTerminationHandlers = function(){
-        //  Process on exit and signals.
-        process.on('exit', function() { self.terminator(); });
+function cleanFlightDataArray(){
+  var results=[];
+  FlightMap.forEach(function(value, key) {
 
-        // Removed 'SIGPIPE' from the list - bugz 852598.
-        ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT',
-         'SIGBUS', 'SIGFPE', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGTERM'
-        ].forEach(function(element, index, array) {
-            process.on(element, function() { self.terminator(element); });
-        });
-    };
+    if ((Date.now() - value.updatetimestamp )>90000){
+      FlightMap.remove(key);
+    }
+  }
+);}
 
-
-    /*  ================================================================  */
-    /*  App server functions (main app logic here).                       */
-    /*  ================================================================  */
-
-    /**
-     *  Create the routing table entries + handlers for the application.
-     */
-    self.createRoutes = function() {
-        self.routes = { };
-
-        self.routes['/asciimo'] = function(req, res) {
-            var link = "http://i.imgur.com/kmbjB.png";
-            res.send("<html><body><img src='" + link + "'></body></html>");
-        };
-
-        self.routes['/'] = function(req, res) {
-            res.setHeader('Content-Type', 'text/html');
-            res.send(self.cache_get('index.html') );
-        };
-    };
-
-
-    /**
-     *  Initialize the server (express) and create the routes and register
-     *  the handlers.
-     */
-    self.initializeServer = function() {
-        self.createRoutes();
-        self.app = express.createServer();
-
-        //  Add handlers for the app (from the routes).
-        for (var r in self.routes) {
-            self.app.get(r, self.routes[r]);
-        }
-    };
-
-
-    /**
-     *  Initializes the sample application.
-     */
-    self.initialize = function() {
-        self.setupVariables();
-        self.populateCache();
-        self.setupTerminationHandlers();
-
-        // Create the express server and routes.
-        self.initializeServer();
-    };
-
-
-    /**
-     *  Start the server (starts up the sample application).
-     */
-    self.start = function() {
-        //  Start the app on the specific interface (and port).
-        self.app.listen(self.port, self.ipaddress, function() {
-            console.log('%s: Node server started on %s:%d ...',
-                        Date(Date.now() ), self.ipaddress, self.port);
-        });
-    };
-
-};   /*  Sample Application.  */
-
-
-
-/**
- *  main():  Main code.
- */
-var zapp = new SampleApp();
-zapp.initialize();
-zapp.start();
 
