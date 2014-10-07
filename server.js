@@ -15,6 +15,7 @@ var MQTTOptions = {
   password: 'admin123456',
 };
 var client = mqtt.createClient(1883, 'localhost',MQTTOptions);
+var httpListenerport = process.env.OPENSHIFT_NODEJS_PORT || 8080;
 
 
 var file = new static.Server('./public'); 
@@ -33,7 +34,7 @@ require('http').createServer(function (request, response) {
   }
   request.addListener('end', function () {
   }).resume();
-}).listen(8080);
+}).listen(httpListenerport);
 
 client.subscribe('/topic/flightinfo',function(){
 	console.log('Subscribed....')
