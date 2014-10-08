@@ -4,6 +4,7 @@ var mqtt = require('mqtt');
 var static = require('node-static');
 var sbs1 = require('sbs1');
 var HashMap = require('hashmap').HashMap;
+var tls = require("tls");
 
 
 var FlightMap = new HashMap();
@@ -13,8 +14,91 @@ var FlightMap = new HashMap();
 var MQTTOptions = {
   username: 'admin',
   password: 'admin123456',
+  sniHost: 'test123',
+  rejectUnauthorized : false,
+  certPath: '/tmp/server.crt'
 };
-var client = mqtt.createClient(1883, 'localhost',MQTTOptions);
+
+
+
+//Monkey patch MQTT.js code to facilitate SNI for SSL
+// mqtt.createSecureClient = function(port, host, opts) {
+//   var builder, mqttClient, tls_opts = {};
+
+//   if ('object' === typeof port) {
+//     opts = port;
+//     port = defaultPort;
+//     host = defaultHost;
+//   } else if ('object' === typeof host) {
+//     opts = host;
+//     host = defaultHost;
+//   } else if ('object' !== typeof opts) {
+//     opts = {};
+//   }
+
+//   if (opts && opts.clean === false && !opts.clientId) {
+//     throw new Error("Missing clientId for unclean clients");
+//   }
+
+//   if (opts.keyPath && opts.certPath) {
+//     tls_opts.key = fs.readFileSync(opts.keyPath);
+//     tls_opts.cert = fs.readFileSync(opts.certPath);
+//   }
+//   tls_opts.ca = [];
+//   if (opts.ca) {
+//     for (var i = 0;i<opts.ca.length;i++) {
+//       tls_opts.ca[i] = fs.readFileSync(opts.ca[i]);
+//     }
+//   }
+//   tls_opts.rejectUnauthorized = opts.rejectUnauthorized || false;
+
+//   tls_opts.port = port
+//   tls_opts.host = host
+
+//   //Check for SNI settings
+//   if (opts.sniHost){
+//     tls_opts.servername = opts.SNIHost;
+//   }
+
+//   builder = function() {
+//     var tls_client = tls.connect(tls_opts)
+
+//     tls_client.on('secureConnect', function() {
+//       if (tls_opts.rejectUnauthorized && !tls_client.authorized) {
+//         tls_client.emit('error', new Error('TLS not authorized'));
+//       } else {
+//         tls_client.removeListener('error', handleTLSerrors)
+//       }
+//     });
+
+//     function handleTLSerrors(err) {
+//       // How can I get verify this error is a tls error?
+//       if (tls_opts.rejectUnauthorized) {
+//         mqttClient.emit('error', err)
+//       }
+
+//       // close this connection to match the behaviour of net
+//       // otherwise all we get is an error from the tls_client
+//       // and close event doesn't fire. This is a work around
+//       // to enable the reconnect code to work the same as with
+//       // net.createConnection
+//       tls_client.end();
+//     }
+
+//     tls_client.on('error', handleTLSerrors)
+
+//     return tls_client;
+//   };
+//   mqttClient = new mqtt.MqttClient(builder, opts);
+
+//   return mqttClient;
+// };
+
+
+
+
+// var client = mqtt.createSecureClient(1883, 'localhost',MQTTOptions);
+var client = mqtt.createSecureClient(2306, 'amq2-noconnor.rhcloud.com',MQTTOptions);
 var server_port = process.env.OPENSHIFT_NODEJS_PORT || 8080
 var server_ip_address = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1'
 
@@ -23,6 +107,11 @@ var file = new static.Server('./public');
 require('http').createServer(function (request, response) {
   var url = request.url;
   console.log(url);
+  
+  if (url == '/'){
+    request.url = 'gmap.html'
+  }
+
   if(url == '/dump1090/data.json')
   {
     response.setHeader("Content-Type", "text/json");
@@ -37,7 +126,7 @@ require('http').createServer(function (request, response) {
   }).resume();
 }).listen(server_port,server_ip_address);
 
-client.subscribe('/topic/flightinfo',function(){
+client.subscribe('/topic/flightinfo/au',function(){
 	console.log('Subscribed....')
 });
 
