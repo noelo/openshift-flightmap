@@ -16,7 +16,7 @@ var MQTTOptions = {
   password: 'admin123456',
   sniHost: 'test123',
   rejectUnauthorized : false,
-  certPath: '/tmp/server.crt'
+  certPath: 'server.crt'
 };
 
 
