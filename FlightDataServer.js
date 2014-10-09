@@ -97,7 +97,7 @@ var MQTTOptions = {
 
 
 
-// var client = mqtt.createSecureClient(1883, 'localhost',MQTTOptions);
+//var client = mqtt.createSecureClient(1883, 'localhost',MQTTOptions);
 var client = mqtt.createSecureClient(2306, 'amq2-noconnor.rhcloud.com',MQTTOptions);
 var server_port = process.env.OPENSHIFT_NODEJS_PORT || 8080
 var server_ip_address = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1'
