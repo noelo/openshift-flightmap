@@ -206,16 +206,21 @@ var planeObject = {
 
 	// Update our marker on the map
 	funcUpdateMarker: function() {
+
 			if (this.marker) {
 				this.marker.setPosition(new google.maps.LatLng(this.latitude, this.longitude));
 				this.marker.setIcon(this.funcGetIcon());
+
 			} else {
 				this.marker = new google.maps.Marker({
 					position: new google.maps.LatLng(this.latitude, this.longitude),
 					map: GoogleMap,
 					icon: this.funcGetIcon(),
+					title: this.flight,
+					anchor: new google.maps.Point(32, 32),
 					visable: true
 				});
+
 
 				// This is so we can match icao address
 				this.marker.icao = this.icao;

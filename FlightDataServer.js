@@ -13,16 +13,25 @@ var FlightMap = new HashMap();
 
 var MQTTOptions = {
   username: 'admin',
-  password: 'admin123456',
+  password: 'admin',
   sniHost: 'test123',
   rejectUnauthorized : false,
   certPath: 'server.crt'
 };
 
 //var client = mqtt.createSecureClient(1883, 'localhost',MQTTOptions);
-var client = mqtt.createSecureClient(2306, 'amq2-noconnor.rhcloud.com',MQTTOptions);
+
 var server_port = process.env.OPENSHIFT_NODEJS_PORT || 8080
 var server_ip_address = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1'
+var amq_server_host = process.env.AMQ_SERVER_HOST || 'localhost'
+var amq_server_port = process.env.AMQ_SERVER_PORT || '1883'
+
+MQTTOptions.certPath = process.env.AMQ_SERVER_CERT || 'amq2-noconnor.rhcloud.com.server.crt'
+MQTTOptions.username  = process.env.AMQ_USER || 'admin'
+MQTTOptions.password = process.env.AMQ_PASSWORD || 'admin'
+console.log(MQTTOptions, amq_server_port,amq_server_host);
+
+var client = mqtt.createSecureClient(amq_server_port, amq_server_host, MQTTOptions);
 
 
 var file = new static.Server('./public'); 
