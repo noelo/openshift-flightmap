@@ -7,7 +7,7 @@
 
 // -- Output Settings -------------------------------------
 // Show metric values
-Metric = false; // true or false
+Metric = true; // true or false
 
 // -- Map settings ----------------------------------------
 // The Latitude and Longitude in decimal format
@@ -27,7 +27,7 @@ MarkerColor	  = "rgb(127, 127, 127)";
 SelectedColor = "rgb(225, 225, 225)";
 
 // -- Site Settings ---------------------------------------
-SiteShow    = false; // true or false
+SiteShow    = true; // true or false
 // The Latitude and Longitude in decimal format
 // SiteLat     = 45.0;
 // SiteLon     = 9.0;
