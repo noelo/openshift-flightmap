@@ -233,7 +233,7 @@ var planeObject = {
 			if (this.flight.length == 0) {
 				this.marker.setTitle(this.hex);
 			} else {
-				this.marker.setTitle(this.flight+' ('+this.icao+')');
+				this.marker.setTitle(this.flight+' ('+this.icao+') '+'['+this.altitude+'/'+this.speed+']');
 			}
 			return this.marker;
 		},
